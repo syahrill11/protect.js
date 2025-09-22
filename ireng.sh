@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ╔════════════════════════════════════════════════════════════════════╗
-# ║ 🛡️  PABLO×KUROZI PROTECTOR SYSTEM v1.4                            ║
+# ║ 🛡️  SYAH NIH DEKS PROTECTOR SYSTEM v1.4                            ║
 # ║ Proteksi Controller Admin & Server hanya untuk ID tertentu         ║
 # ╚════════════════════════════════════════════════════════════════════╝
 
@@ -17,7 +17,7 @@ VERSION="1.4"
 clear
 echo -e "${CYAN}"
 echo "╔══════════════════════════════════════════════════════╗"
-echo "║         Pablo×Kurozi Protect + Panel Builder         ║"
+echo "║         SYAH NIH DEK Protect + Panel Builder         ║"
 echo "║                    Version $VERSION                  ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo -e "${RESET}"
@@ -74,7 +74,7 @@ if [[ "$MODE" == "1" ]]; then
                 print;
                 print "        \$user = Auth::user();";
                 print "        if (!\$user || (\$user->id !== " admin_id " && \$user->id !== \$server->owner_id)) {";
-                print "            throw new DisplayException(\"Pablo×Kurozi Protect - Anda tidak punya izin melihat server ini\");";
+                print "            throw new DisplayException(\"SYAH Protect - Anda tidak punya izin melihat server ini\");";
                 print "        }";
                 in_func = 0; next;
             }
@@ -105,7 +105,7 @@ if [[ "$MODE" == "1" ]]; then
                 print;
                 print "        \$user = Auth::user();";
                 print "        if (!\$user || \$user->id !== " admin_id ") {";
-                print "            abort(403, \"Pablo×Kurozi Protect - Akses ditolak\");";
+                print "            abort(403, \"SYAH Protect - Akses ditolak\");";
                 print "        }";
                 in_func = 0; next;
             }
