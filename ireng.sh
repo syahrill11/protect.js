@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # ╔════════════════════════════════════════════════════════════════════╗
-# ║ 🛡️  SYAH NIH DEKS PROTECTOR SYSTEM v1.4                            ║
-# ║ Proteksi Controller Admin & Server hanya untuk ID tertentu         ║
+# ║ 🛡️  SYAH NIH DEKS PROTECTOR SYSTEM v1.5                            ║
+# ║ Proteksi Controller Admin & Server + Anti Curi File                ║
 # ╚════════════════════════════════════════════════════════════════════╝
 
 # Warna
@@ -12,7 +12,7 @@ CYAN="\033[1;36m"
 YELLOW="\033[1;33m"
 BLUE="\033[1;34m"
 RESET="\033[0m"
-VERSION="1.4"
+VERSION="1.5"
 
 clear
 echo -e "${CYAN}"
@@ -23,7 +23,7 @@ echo "╚═══════════════════════�
 echo -e "${RESET}"
 
 echo -e "${YELLOW}Pilih mode yang ingin dijalankan:${RESET}"
-echo -e "1) 🔐 Install Protect (Add Protect)"
+echo -e "1) 🔐 Install Protect (Add Protect + Anti Curi)"
 echo -e "2) ♻️ Restore Backup (Restore)"
 read -p "Masukkan pilihan (1/2): " MODE
 
@@ -115,6 +115,24 @@ if [[ "$MODE" == "1" ]]; then
         fi
     done
 
+    # === Anti Curi File (HTACCESS & Permission) ===
+    echo -e "${YELLOW}🔒 Menambahkan Anti Curi File...${RESET}"
+    PROTECT_DIR="/var/www/pterodactyl/app/Http/Controllers"
+    cat <<'EOF' > "$PROTECT_DIR/.htaccess"
+<FilesMatch "\.php$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+EOF
+    chmod 600 "$PROTECT_DIR/.htaccess"
+    chown www-data:www-data "$PROTECT_DIR/.htaccess"
+
+    for name in "${!CONTROLLERS[@]}"; do
+        chmod 600 "${CONTROLLERS[$name]}"
+        chown www-data:www-data "${CONTROLLERS[$name]}"
+    done
+    echo -e "${GREEN}✅ Anti Curi File aktif! File hanya bisa dibaca webserver (www-data).${RESET}"
+
     echo -e "${YELLOW}➤ Install Node.js 16 dan build frontend panel...${RESET}"
     sudo apt-get update -y >/dev/null
     sudo apt-get remove nodejs -y >/dev/null
@@ -130,7 +148,8 @@ if [[ "$MODE" == "1" ]]; then
     echo -e "\n${BLUE}🎉 Protect selesai!"
     echo -e "📁 Backup file tersimpan di: $BACKUP_DIR"
     echo -e "🛡️ Hanya ID $ADMIN_ID yang bisa akses Admin Controller"
-    echo -e "🛡️ Anti Intip Server aktif (hanya Admin Utama & Owner server bisa intip)"
+    echo -e "🛡️ Anti Intip Server aktif"
+    echo -e "🛡️ Anti Curi File aktif (izin file dikunci & .htaccess blok akses)"
     echo -e "${RESET}"
 
 elif [[ "$MODE" == "2" ]]; then
@@ -144,11 +163,13 @@ elif [[ "$MODE" == "2" ]]; then
     for name in "${!CONTROLLERS[@]}"; do
         if [[ -f "$BACKUP_DIR/$name.bak" ]]; then
             cp "$BACKUP_DIR/$name.bak" "${CONTROLLERS[$name]}"
+            chmod 644 "${CONTROLLERS[$name]}"
             echo -e "${GREEN}🔄 Dipulihkan: $name${RESET}"
         else
             echo -e "${RED}⚠️ Backup tidak ditemukan untuk $name!${RESET}"
         fi
     done
+    rm -f /var/www/pterodactyl/app/Http/Controllers/.htaccess
 
     echo -e "${YELLOW}➤ Install Node.js 16 dan build frontend panel...${RESET}"
     sudo apt-get update -y >/dev/null
@@ -162,7 +183,7 @@ elif [[ "$MODE" == "2" ]]; then
     yarn add cross-env >/dev/null
     yarn build:production --progress
 
-    echo -e "\n${BLUE}✅ Restore selesai. Semua file dikembalikan ke versi asli.${RESET}"
+    echo -e "\n${BLUE}✅ Restore selesai. Semua file & izin dikembalikan.${RESET}"
 
 else
     echo -e "${RED}❌ Pilihan tidak valid. Masukkan 1 atau 2.${RESET}"
