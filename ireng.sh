@@ -2,10 +2,9 @@
 
 # ╔════════════════════════════════════════════════════════════════════╗
 # ║ 🛡️  SYAH PROTECTOR SYSTEM v1.5                                     ║
-# ║ Proteksi Controller Admin + Anti Maling SC + Restore               ║
+# ║ Proteksi Controller Admin + File Download                          ║
 # ╚════════════════════════════════════════════════════════════════════╝
 
-# Warna
 RED="\033[1;31m"
 GREEN="\033[1;32m"
 CYAN="\033[1;36m"
@@ -17,147 +16,167 @@ VERSION="1.5"
 clear
 echo -e "${CYAN}"
 echo "╔══════════════════════════════════════════════════════╗"
-echo "║                SYAH Protect + Panel Builder          ║"
+echo "║         SYAH Protect + Panel Builder                 ║"
 echo "║                    Version $VERSION                  ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo -e "${RESET}"
 
-echo -e "${YELLOW}Pilih mode yang ingin dijalankan:${RESET}"
-echo -e "1) 🔐 Install Protect (Add Protect + Anti Maling SC)"
-echo -e "2) ♻️ Restore Backup (Restore)"
+echo -e "${YELLOW}Pilih mode:${RESET}"
+echo "1) 🔐 Install Protect"
+echo "2) ♻️ Restore Backup"
 read -p "Masukkan pilihan (1/2): " MODE
 
 declare -A CONTROLLERS
 CONTROLLERS["NodeController.php"]="/var/www/pterodactyl/app/Http/Controllers/Admin/Nodes/NodeController.php"
 CONTROLLERS["NestController.php"]="/var/www/pterodactyl/app/Http/Controllers/Admin/Nests/NestController.php"
 CONTROLLERS["IndexController.php"]="/var/www/pterodactyl/app/Http/Controllers/Admin/Settings/IndexController.php"
+CONTROLLERS["UserController.php"]="/var/www/pterodactyl/app/Http/Controllers/Admin/UserController.php"
+CONTROLLERS["DownloadController.php"]="/var/www/pterodactyl/app/Http/Controllers/Server/DownloadController.php"
 
-BACKUP_DIR="backup_syah_protect"
+BACKUP_DIR="backup_pablo_protect"
 
 if [[ "$MODE" == "1" ]]; then
     read -p "👤 Masukkan ID Admin Utama (contoh: 1): " ADMIN_ID
-    if [[ -z "$ADMIN_ID" ]]; then
-        echo -e "${RED}❌ Admin ID tidak boleh kosong.${RESET}"
-        exit 1
-    fi
+    [[ -z "$ADMIN_ID" ]] && echo -e "${RED}❌ Admin ID tidak boleh kosong.${RESET}" && exit 1
 
     mkdir -p "$BACKUP_DIR"
+    echo -e "${YELLOW}📦 Membackup file asli ke: ${BLUE}$BACKUP_DIR${RESET}"
 
-    echo -e "${YELLOW}📦 Membackup file asli sebelum di protect ke: ${BLUE}$BACKUP_DIR${RESET}"
     for name in "${!CONTROLLERS[@]}"; do
-        cp "${CONTROLLERS[$name]}" "$BACKUP_DIR/$name.bak"
+        [[ -f "${CONTROLLERS[$name]}" ]] && cp "${CONTROLLERS[$name]}" "$BACKUP_DIR/$name.bak"
     done
 
     echo -e "${GREEN}🔧 Menerapkan Protect hanya untuk ID $ADMIN_ID...${RESET}"
 
     for name in "${!CONTROLLERS[@]}"; do
         path="${CONTROLLERS[$name]}"
-        if ! grep -q "public function index" "$path"; then
-            echo -e "${RED}⚠️ Gagal: $name tidak memiliki 'public function index()'! Lewat.${RESET}"
-            continue
-        fi
+        [[ ! -f "$path" ]] && echo -e "${RED}❌ File tidak ditemukan: $path${RESET}" && continue
 
-        awk -v admin_id="$ADMIN_ID" '
-        BEGIN { inserted_use=0; in_func=0; }
-        /^namespace / {
-            print;
-            if (!inserted_use) {
-                print "use Illuminate\\Support\\Facades\\Auth;";
-                inserted_use = 1;
+        if [[ "$name" == "UserController.php" ]]; then
+            # Protect Update/Delete User
+            awk -v admin_id="$ADMIN_ID" '
+            BEGIN { inserted_use=0; in_update=0; in_delete=0; }
+            /^namespace / {
+                print;
+                if (!inserted_use) {
+                    print "use Illuminate\\Support\\Facades\\Auth;";
+                    print "use Pterodactyl\\Exceptions\\DisplayException;";
+                    inserted_use = 1;
+                }
+                next;
             }
-            next;
-        }
-        /public function index\(.*\)/ {
-            print; in_func = 1; next;
-        }
-        in_func == 1 && /^\s*{/ {
-            print;
-            print "        \$user = Auth::user();";
-            print "        if (!\$user || \$user->id !== " admin_id ") {";
-            print "            abort(403, \"SYAH Protect - Akses ditolak\");";
-            print "        }";
-            in_func = 0; next;
-        }
-        { print; }
-        ' "$path" > "$path.patched" && mv "$path.patched" "$path"
-        echo -e "${GREEN}✅ Protect diterapkan ke: $name${RESET}"
+            /public function update\(UserFormRequest/ {
+                print; in_update=1; next;
+            }
+            in_update==1 && /^\s*{/ {
+                print;
+                print "        $user = Auth::user();";
+                print "        if (!$user || $user->id !== " admin_id ") {";
+                print "            throw new DisplayException(\"Anda Bukan Admin Utama. Tidak Bisa Edit User/Password Orang Lain\");";
+                print "        }";
+                in_update=0; next;
+            }
+            /public function delete\(Request/ {
+                print; in_delete=1; next;
+            }
+            in_delete==1 && /^\s*{/ {
+                print;
+                print "        $user = Auth::user();";
+                print "        if (!$user || $user->id !== " admin_id ") {";
+                print "            throw new DisplayException(\"Anda Bukan Admin Utama. Tidak Bisa Menghapus User Ini\");";
+                print "        }";
+                in_delete=0; next;
+            }
+            { print; }
+            ' "$path" > "$path.patched" && mv "$path.patched" "$path"
+            echo -e "${GREEN}✅ Protect UserController (Update/Delete) selesai${RESET}"
+
+        elif [[ "$name" == "DownloadController.php" ]]; then
+            # Protect Download File
+            awk -v admin_id="$ADMIN_ID" '
+            BEGIN { inserted_use=0; in_func=0; }
+            /^namespace / {
+                print;
+                if (!inserted_use) {
+                    print "use Illuminate\\Support\\Facades\\Auth;";
+                    print "use Pterodactyl\\Exceptions\\DisplayException;";
+                    inserted_use = 1;
+                }
+                next;
+            }
+            /public function download\(Request/ {
+                print; in_func=1; next;
+            }
+            in_func==1 && /^\s*{/ {
+                print;
+                print "        $user = Auth::user();";
+                print "        if (!$user) {";
+                print "            throw new DisplayException(\"Tidak terautentikasi\");";
+                print "        }";
+                print "        // Cek apakah file milik server user atau bukan";
+                print "        if ($user->id !== " admin_id " && $request->route('server')->owner_id !== $user->id) {";
+                print "            throw new DisplayException(\"Anda Tidak Boleh Download File Server Orang Lain\");";
+                print "        }";
+                in_func=0; next;
+            }
+            { print; }
+            ' "$path" > "$path.patched" && mv "$path.patched" "$path"
+            echo -e "${GREEN}✅ Protect DownloadController selesai${RESET}"
+
+        else
+            # Protect Index di Admin Controllers
+            awk -v admin_id="$ADMIN_ID" '
+            BEGIN { inserted_use=0; in_func=0; }
+            /^namespace / {
+                print;
+                if (!inserted_use) {
+                    print "use Illuminate\\Support\\Facades\\Auth;";
+                    inserted_use = 1;
+                }
+                next;
+            }
+            /public function index\(.*\)/ {
+                print; in_func=1; next;
+            }
+            in_func==1 && /^\s*{/ {
+                print;
+                print "        $user = Auth::user();";
+                print "        if (!$user || $user->id !== " admin_id ") {";
+                print "            abort(403, \"SYAH Protect - Akses ditolak\");";
+                print "        }";
+                in_func=0; next;
+            }
+            { print; }
+            ' "$path" > "$path.patched" && mv "$path.patched" "$path"
+            echo -e "${GREEN}✅ Protect diterapkan ke: $name${RESET}"
+        fi
     done
 
-    # === Anti Maling SC (Lock File + .htaccess) ===
-    echo -e "${YELLOW}🔒 Mengaktifkan Anti Maling SC...${RESET}"
-    PROTECT_DIR="/var/www/pterodactyl/app/Http/Controllers"
-
-    # .htaccess blok akses file PHP
-    cat <<'EOF' > "$PROTECT_DIR/.htaccess"
-<FilesMatch "\.php$">
-    Require all denied
-</FilesMatch>
-
-ErrorDocument 403 "<h1 style='color:red;text-align:center;'>⚠️ SYAH Protect - Akses file ini dilarang!</h1>"
-EOF
-
-    chmod 600 "$PROTECT_DIR/.htaccess"
-    chown www-data:www-data "$PROTECT_DIR/.htaccess"
-
-    # Lock permission file supaya cuma webserver yang bisa baca
-    for name in "${!CONTROLLERS[@]}"; do
-        chmod 600 "${CONTROLLERS[$name]}"
-        chown www-data:www-data "${CONTROLLERS[$name]}"
-    done
-    echo -e "${GREEN}✅ Anti Maling SC aktif! File hanya bisa dibaca webserver.${RESET}"
-
-    echo -e "${YELLOW}➤ Install Node.js 16 dan build frontend panel...${RESET}"
-    sudo apt-get update -y >/dev/null
-    sudo apt-get remove nodejs -y >/dev/null
-    curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash - >/dev/null
-    sudo apt-get install nodejs -y >/dev/null
-
-    cd /var/www/pterodactyl || { echo -e "${RED}❌ Gagal ke direktori panel.${RESET}"; exit 1; }
-
-    npm i -g yarn >/dev/null
-    yarn add cross-env >/dev/null
+    echo -e "${YELLOW}➤ Build ulang frontend panel...${RESET}"
+    cd /var/www/pterodactyl || exit 1
     yarn build:production --progress
 
-    echo -e "\n${BLUE}🎉 Protect selesai!"
-    echo -e "📁 Backup file tersimpan di: $BACKUP_DIR"
-    echo -e "🛡️ Sekarang hanya ID $ADMIN_ID yang bisa akses Admin Controller"
-    echo -e "🛡️ Anti Maling SC aktif (izin file dikunci + blokir akses langsung)"
-    echo -e "${RESET}"
+    echo -e "${BLUE}🎉 Protect selesai!${RESET}"
+    echo -e "🛡️ Hanya ID $ADMIN_ID yang bisa edit/delete user, akses admin controller, dan download file milik server lain."
 
 elif [[ "$MODE" == "2" ]]; then
-    if [[ ! -d "$BACKUP_DIR" ]]; then
-        echo -e "${RED}❌ Folder backup tidak ditemukan: $BACKUP_DIR"
-        echo -e "⚠️ Jalankan mode Protect terlebih dahulu.${RESET}"
-        exit 1
-    fi
+    [[ ! -d "$BACKUP_DIR" ]] && echo -e "${RED}❌ Folder backup tidak ditemukan${RESET}" && exit 1
 
-    echo -e "${CYAN}♻️ Mengembalikan file ke versi sebelum Protect...${RESET}"
+    echo -e "${CYAN}♻️ Mengembalikan file backup...${RESET}"
     for name in "${!CONTROLLERS[@]}"; do
         if [[ -f "$BACKUP_DIR/$name.bak" ]]; then
             cp "$BACKUP_DIR/$name.bak" "${CONTROLLERS[$name]}"
-            chmod 644 "${CONTROLLERS[$name]}"
             echo -e "${GREEN}🔄 Dipulihkan: $name${RESET}"
         else
-            echo -e "${RED}⚠️ Backup tidak ditemukan untuk $name!${RESET}"
+            echo -e "${RED}⚠️ Backup tidak ada untuk $name${RESET}"
         fi
     done
-    rm -f /var/www/pterodactyl/app/Http/Controllers/.htaccess
 
-    echo -e "${YELLOW}➤ Install Node.js 16 dan build frontend panel...${RESET}"
-    sudo apt-get update -y >/dev/null
-    sudo apt-get remove nodejs -y >/dev/null
-    curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash - >/dev/null
-    sudo apt-get install nodejs -y >/dev/null
-
-    cd /var/www/pterodactyl || { echo -e "${RED}❌ Gagal ke direktori panel.${RESET}"; exit 1; }
-
-    npm i -g yarn >/dev/null
-    yarn add cross-env >/dev/null
+    echo -e "${YELLOW}➤ Build ulang frontend panel...${RESET}"
+    cd /var/www/pterodactyl || exit 1
     yarn build:production --progress
-
-    echo -e "\n${BLUE}✅ Restore selesai. Semua file & izin dikembalikan.${RESET}"
-
+    echo -e "${BLUE}✅ Restore selesai.${RESET}"
 else
-    echo -e "${RED}❌ Pilihan tidak valid. Masukkan 1 atau 2.${RESET}"
+    echo -e "${RED}❌ Pilihan tidak valid.${RESET}"
     exit 1
 fi
