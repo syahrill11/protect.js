@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # ╔════════════════════════════════════════════════════════════════════╗
-# ║ 🛡️  SYAH NIH DEKS PROTECTOR SYSTEM v1.5                            ║
-# ║ Proteksi Controller Admin & Server + Anti Curi File                ║
+# ║ 🛡️  SYAH PROTECTOR SYSTEM v1.5                                     ║
+# ║ Proteksi Controller Admin + Anti Maling SC + Restore               ║
 # ╚════════════════════════════════════════════════════════════════════╝
 
 # Warna
@@ -17,13 +17,13 @@ VERSION="1.5"
 clear
 echo -e "${CYAN}"
 echo "╔══════════════════════════════════════════════════════╗"
-echo "║         SYAH NIH DEK Protect + Panel Builder         ║"
+echo "║                SYAH Protect + Panel Builder          ║"
 echo "║                    Version $VERSION                  ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo -e "${RESET}"
 
 echo -e "${YELLOW}Pilih mode yang ingin dijalankan:${RESET}"
-echo -e "1) 🔐 Install Protect (Add Protect + Anti Curi)"
+echo -e "1) 🔐 Install Protect (Add Protect + Anti Maling SC)"
 echo -e "2) ♻️ Restore Backup (Restore)"
 read -p "Masukkan pilihan (1/2): " MODE
 
@@ -31,9 +31,8 @@ declare -A CONTROLLERS
 CONTROLLERS["NodeController.php"]="/var/www/pterodactyl/app/Http/Controllers/Admin/Nodes/NodeController.php"
 CONTROLLERS["NestController.php"]="/var/www/pterodactyl/app/Http/Controllers/Admin/Nests/NestController.php"
 CONTROLLERS["IndexController.php"]="/var/www/pterodactyl/app/Http/Controllers/Admin/Settings/IndexController.php"
-CONTROLLERS["ServerController.php"]="/var/www/pterodactyl/app/Http/Controllers/Server/ServerController.php"
 
-BACKUP_DIR="backup_pablo_protect"
+BACKUP_DIR="backup_syah_protect"
 
 if [[ "$MODE" == "1" ]]; then
     read -p "👤 Masukkan ID Admin Utama (contoh: 1): " ADMIN_ID
@@ -53,85 +52,59 @@ if [[ "$MODE" == "1" ]]; then
 
     for name in "${!CONTROLLERS[@]}"; do
         path="${CONTROLLERS[$name]}"
-
-        if [[ "$name" == "ServerController.php" ]]; then
-            # === Anti Intip Server ===
-            awk -v admin_id="$ADMIN_ID" '
-            BEGIN { inserted_use=0; in_func=0; }
-            /^namespace / {
-                print;
-                if (!inserted_use) {
-                    print "use Illuminate\\Support\\Facades\\Auth;";
-                    print "use Pterodactyl\\Exceptions\\DisplayException;";
-                    inserted_use = 1;
-                }
-                next;
-            }
-            /public function show\(.*\)/ {
-                print; in_func = 1; next;
-            }
-            in_func == 1 && /^\s*{/ {
-                print;
-                print "        \$user = Auth::user();";
-                print "        if (!\$user || (\$user->id !== " admin_id " && \$user->id !== \$server->owner_id)) {";
-                print "            throw new DisplayException(\"SYAH Protect - Anda tidak punya izin melihat server ini\");";
-                print "        }";
-                in_func = 0; next;
-            }
-            { print; }
-            ' "$path" > "$path.patched" && mv "$path.patched" "$path"
-            echo -e "${GREEN}✅ Anti Intip diterapkan ke: $name${RESET}"
-        else
-            # === Proteksi Admin Controller ===
-            if ! grep -q "public function index" "$path"; then
-                echo -e "${RED}⚠️ Gagal: $name tidak memiliki 'public function index()'! Lewat.${RESET}"
-                continue
-            fi
-
-            awk -v admin_id="$ADMIN_ID" '
-            BEGIN { inserted_use=0; in_func=0; }
-            /^namespace / {
-                print;
-                if (!inserted_use) {
-                    print "use Illuminate\\Support\\Facades\\Auth;";
-                    inserted_use = 1;
-                }
-                next;
-            }
-            /public function index\(.*\)/ {
-                print; in_func = 1; next;
-            }
-            in_func == 1 && /^\s*{/ {
-                print;
-                print "        \$user = Auth::user();";
-                print "        if (!\$user || \$user->id !== " admin_id ") {";
-                print "            abort(403, \"SYAH Protect - Akses ditolak\");";
-                print "        }";
-                in_func = 0; next;
-            }
-            { print; }
-            ' "$path" > "$path.patched" && mv "$path.patched" "$path"
-            echo -e "${GREEN}✅ Protect diterapkan ke: $name${RESET}"
+        if ! grep -q "public function index" "$path"; then
+            echo -e "${RED}⚠️ Gagal: $name tidak memiliki 'public function index()'! Lewat.${RESET}"
+            continue
         fi
+
+        awk -v admin_id="$ADMIN_ID" '
+        BEGIN { inserted_use=0; in_func=0; }
+        /^namespace / {
+            print;
+            if (!inserted_use) {
+                print "use Illuminate\\Support\\Facades\\Auth;";
+                inserted_use = 1;
+            }
+            next;
+        }
+        /public function index\(.*\)/ {
+            print; in_func = 1; next;
+        }
+        in_func == 1 && /^\s*{/ {
+            print;
+            print "        \$user = Auth::user();";
+            print "        if (!\$user || \$user->id !== " admin_id ") {";
+            print "            abort(403, \"SYAH Protect - Akses ditolak\");";
+            print "        }";
+            in_func = 0; next;
+        }
+        { print; }
+        ' "$path" > "$path.patched" && mv "$path.patched" "$path"
+        echo -e "${GREEN}✅ Protect diterapkan ke: $name${RESET}"
     done
 
-    # === Anti Curi File (HTACCESS & Permission) ===
-    echo -e "${YELLOW}🔒 Menambahkan Anti Curi File...${RESET}"
+    # === Anti Maling SC (Lock File + .htaccess) ===
+    echo -e "${YELLOW}🔒 Mengaktifkan Anti Maling SC...${RESET}"
     PROTECT_DIR="/var/www/pterodactyl/app/Http/Controllers"
+
+    # .htaccess blok akses file PHP
     cat <<'EOF' > "$PROTECT_DIR/.htaccess"
 <FilesMatch "\.php$">
-    Order allow,deny
-    Deny from all
+    Require all denied
 </FilesMatch>
+
+ErrorDocument 403 "<h1 style='color:red;text-align:center;'>⚠️ SYAH Protect - Akses file ini dilarang!</h1>"
 EOF
+
     chmod 600 "$PROTECT_DIR/.htaccess"
     chown www-data:www-data "$PROTECT_DIR/.htaccess"
 
+    # Lock permission file supaya cuma webserver yang bisa baca
     for name in "${!CONTROLLERS[@]}"; do
         chmod 600 "${CONTROLLERS[$name]}"
         chown www-data:www-data "${CONTROLLERS[$name]}"
     done
-    echo -e "${GREEN}✅ Anti Curi File aktif! File hanya bisa dibaca webserver (www-data).${RESET}"
+    echo -e "${GREEN}✅ Anti Maling SC aktif! File hanya bisa dibaca webserver.${RESET}"
 
     echo -e "${YELLOW}➤ Install Node.js 16 dan build frontend panel...${RESET}"
     sudo apt-get update -y >/dev/null
@@ -147,9 +120,8 @@ EOF
 
     echo -e "\n${BLUE}🎉 Protect selesai!"
     echo -e "📁 Backup file tersimpan di: $BACKUP_DIR"
-    echo -e "🛡️ Hanya ID $ADMIN_ID yang bisa akses Admin Controller"
-    echo -e "🛡️ Anti Intip Server aktif"
-    echo -e "🛡️ Anti Curi File aktif (izin file dikunci & .htaccess blok akses)"
+    echo -e "🛡️ Sekarang hanya ID $ADMIN_ID yang bisa akses Admin Controller"
+    echo -e "🛡️ Anti Maling SC aktif (izin file dikunci + blokir akses langsung)"
     echo -e "${RESET}"
 
 elif [[ "$MODE" == "2" ]]; then
