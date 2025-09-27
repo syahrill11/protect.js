@@ -1,4 +1,3 @@
-```bash
 #!/bin/bash
 
 # ╔════════════════════════════════════════════════════════════════════╗
@@ -165,4 +164,3 @@ else
     echo -e "${RED}❌ Pilihan tidak valid. Masukkan 1 atau 2.${RESET}"
     exit 1
 fi
-```
