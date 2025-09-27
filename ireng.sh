@@ -1,18 +1,18 @@
+```bash
 #!/bin/bash
 
 # ╔════════════════════════════════════════════════════════════════════╗
-# ║ 🛡️  SYAH PROTECTOR SYSTEM v1.6                                    ║
-# ║ Proteksi Admin Controller + FileController (anti edit/download/upload) ║
+# ║ 🛡️  SYAH PROTECTOR SYSTEM v1.7                                    ║
+# ║ Proteksi Admin Controller + FileController (owner bisa akses)      ║
 # ╚════════════════════════════════════════════════════════════════════╝
 
-# Warna
 RED="\033[1;31m"
 GREEN="\033[1;32m"
 CYAN="\033[1;36m"
 YELLOW="\033[1;33m"
 BLUE="\033[1;34m"
 RESET="\033[0m"
-VERSION="1.6"
+VERSION="1.7"
 
 clear
 echo -e "${CYAN}"
@@ -54,55 +54,54 @@ if [[ "$MODE" == "1" ]]; then
     for name in "${!CONTROLLERS[@]}"; do
         path="${CONTROLLERS[$name]}"
         if [[ "$name" == "FileController.php" ]]; then
-            # Proteksi download & upload
-            awk -v admin_id="$ADMIN_ID" '
+            # Proteksi download & upload (admin utama + owner server)
+            awk -v admin_id="$ADMIN_ID" -v version="$VERSION" '
             BEGIN { inserted_use=0; in_func=0; }
             /^namespace / {
                 print;
                 if (!inserted_use) {
                     print "use Illuminate\\Support\\Facades\\Auth;";
-                    inserted_use = 1;
+                    print "use Pterodactyl\\Exceptions\\DisplayException;";
+                    inserted_use=1;
                 }
                 next;
             }
-            /public function download\(.*\)/ { print; in_func=1; next; }
+            (/public function download\(.*\)/ || /public function upload\(.*\)/) {
+                print; in_func=1; next;
+            }
             in_func==1 && /^\s*{/ {
                 print;
-                print "        \$user = Auth::user();";
-                print "        if (!\$user || \$user->id !== " admin_id ") {";
-                print "            abort(403, \"SYAH Protect - Download hanya admin utama yang diizinkan\");";
+                print "        $user = Auth::user();";
+                print "        if (!$user) {";
+                print "            throw new DisplayException(\"Anda tidak memiliki akses (SYAH Protect V\" . version . \")\");";
                 print "        }";
-                in_func=0; next;
-            }
-            /public function upload\(.*\)/ { print; in_func=2; next; }
-            in_func==2 && /^\s*{/ {
-                print;
-                print "        \$user = Auth::user();";
-                print "        if (!\$user || \$user->id !== " admin_id ") {";
-                print "            abort(403, \"SYAH Protect - Upload hanya admin utama yang diizinkan\");";
+                print "        if ($user->id !== " admin_id ") {";
+                print "            if ($server->owner_id !== $user->id) {";
+                print "                throw new DisplayException(\"Anda bukan pemilik server ini. Upload/Download ditolak (SYAH Protect V\" . version . \")\");";
+                print "            }";
                 print "        }";
                 in_func=0; next;
             }
             { print; }
             ' "$path" > "$path.patched" && mv "$path.patched" "$path"
-            echo -e "${GREEN}✅ Protect diterapkan ke: $name (Download/Upload)${RESET}"
+            echo -e "${GREEN}✅ Protect diterapkan ke: $name (Upload/Download)${RESET}"
         else
-            # Proteksi index
+            # Proteksi index (hanya admin utama)
             awk -v admin_id="$ADMIN_ID" '
             BEGIN { inserted_use=0; in_func=0; }
             /^namespace / {
                 print;
                 if (!inserted_use) {
                     print "use Illuminate\\Support\\Facades\\Auth;";
-                    inserted_use = 1;
+                    inserted_use=1;
                 }
                 next;
             }
             /public function index\(.*\)/ { print; in_func=1; next; }
             in_func==1 && /^\s*{/ {
                 print;
-                print "        \$user = Auth::user();";
-                print "        if (!\$user || \$user->id !== " admin_id ") {";
+                print "        $user = Auth::user();";
+                print "        if (!$user || $user->id !== " admin_id ") {";
                 print "            abort(403, \"SYAH Protect - Akses ditolak\");";
                 print "        }";
                 in_func=0; next;
@@ -127,7 +126,8 @@ if [[ "$MODE" == "1" ]]; then
 
     echo -e "\n${BLUE}🎉 Protect selesai!"
     echo -e "📁 Backup file tersimpan di: $BACKUP_DIR"
-    echo -e "🛡️ Sekarang hanya ID $ADMIN_ID yang bisa akses edit Nodes/Nests/Settings + Download/Upload file"
+    echo -e "🛡️ Hanya ID $ADMIN_ID & owner server yang bisa upload/download file"
+    echo -e "🛡️ Hanya ID $ADMIN_ID yang bisa edit Nodes/Nests/Settings"
     echo -e "${RESET}"
 
 elif [[ "$MODE" == "2" ]]; then
@@ -165,3 +165,4 @@ else
     echo -e "${RED}❌ Pilihan tidak valid. Masukkan 1 atau 2.${RESET}"
     exit 1
 fi
+```
