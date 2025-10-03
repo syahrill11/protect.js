@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ╔════════════════════════════════════════════════════════════════════╗
-# ║ 🛡️   PROTECTOR SYSTEM v1.3                            ║
+# ║ 🛡️  SYAH PROTECTOR SYSTEM v1.3                            ║
 # ║ Proteksi Controller Admin hanya untuk ID tertentu + Restore       ║
 # ╚════════════════════════════════════════════════════════════════════╝
 
@@ -17,7 +17,7 @@ VERSION="1.4"
 clear
 echo -e "${CYAN}${BOLD}"
 echo "╔══════════════════════════════════════════════════════╗"
-echo "║          Protect + Panel Builder         ║"
+echo "║         Pablo×Kurozi Protect + Panel Builder         ║"
 echo "║                    Version $VERSION                       ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo -e "${RESET}"
@@ -74,7 +74,7 @@ if [[ "$MODE" == "1" ]]; then
             print;
             print "        $user = Auth::user();";
             print "        if (!$user || $user->id !== " admin_id ") {";
-            print "            abort(403, \"bocah tolol ngapain lu?\");";
+            print "            abort(403, \"Pablo×Kurozi Protect - Akses ditolak\");";
             print "        }";
             in_func = 0; next;
         }
